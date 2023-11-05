@@ -30,9 +30,6 @@ typedef struct payment_opts_s {
 } payment_opts_t;
 
 
-enum VendotekStage{
-    RC_IDL_VRP, RC_FIN_IDL_END, ALL
-};
 
 class DiaVendotek 
 {
@@ -43,13 +40,11 @@ public:
 
     
     pthread_t ExecuteDriverProgramThread;
-    pthread_t ExecutePaymentConfirmationDriverProgramThread;
+    pthread_t ExecuteRefundsThread;
     pthread_mutex_t MoneyLock = PTHREAD_MUTEX_INITIALIZER;
     pthread_t ExecutePingThread;
     pthread_mutex_t OperationLock = PTHREAD_MUTEX_INITIALIZER;
     pthread_mutex_t StateLock = PTHREAD_MUTEX_INITIALIZER;
-    pthread_mutex_t RefundsLock = PTHREAD_MUTEX_INITIALIZER;
-    bool IsTransactionSeparated;
     int ToBeDeleted = 0;
     int RequestedMoney;
     int Available = 0;
@@ -80,10 +75,10 @@ int DiaVendotek_GetTransactionStatus(void * specificDriver);
 
 void* DiaVendotek_ExecuteDriverProgramThread(void * devicePtr);
 
-int DiaVendotek_PerformTransaction(void * specficDriver, int money, bool isTrasactionSeparated);
+int DiaVendotek_PerformTransaction(void * specficDriver, int money);
 //---------------------------------------------------------------------------
-int DiaVendotek_ConfirmTransaction(void * specficDriver, int money);
-void* DiaVendotek_ExecutePaymentConfirmationDriverProgramThread(void * devicePtr);
+int DiaVendotek_RefundTransaction(void * specficDriver, int money);
+void* DiaVendotek_ExecuteRefundsThread(void * devicePtr);
 
 //---------------------------------------------------------------------------
 int DiaVendotek_StopDriver(void * specficDriver);

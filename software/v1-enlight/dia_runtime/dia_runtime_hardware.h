@@ -219,16 +219,7 @@ class DiaRuntimeHardware {
         }
         return 0;
     }
-    
-    int (*confirm_transaction_function)(void* object, int balance);
-    int ConfirmTransaction(int balance){
-        if (confirm_transaction_function && electronical_object) {
-            return confirm_transaction_function(electronical_object, balance);
-        } else {
-            printf("error: NIL object or function ConfirmTransaction\n");
-        }
-        return 0;
-    }
+
 
     int (*request_transaction_function)(void* object, int money);
     int RequestTransaction(int money) {
@@ -240,10 +231,10 @@ class DiaRuntimeHardware {
         return 0;
     }
 
-    int (*request_transaction_separated_function)(void* object, int money);
-    int RequestTransactionSeparated(int money) {
-        if (electronical_object && request_transaction_separated_function) {
-            return request_transaction_separated_function(electronical_object, money);
+    int (*refund_transaction_function)(void* object, int money);
+    int RefundTransaction(int money) {
+        if (electronical_object && refund_transaction_function) {
+            return refund_transaction_function(electronical_object, money);
         } else {
             printf("error: NIL object or function RequestTransactionSeparated\n");
         }
@@ -463,7 +454,7 @@ class DiaRuntimeHardware {
         get_electronical_function = 0;
         request_transaction_function = 0;
         //----------------------------------------------------------
-        confirm_transaction_function = 0;
+        refund_transaction_function = 0;
         //------------------------------------------------------------
         get_transaction_status_function = 0;
         abort_transaction_function = 0;

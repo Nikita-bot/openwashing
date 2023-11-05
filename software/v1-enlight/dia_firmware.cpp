@@ -485,20 +485,11 @@ int request_transaction(void *object, int money) {
     return 1;
 }
 
-int request_transaction_separated(void *object, int money){
-    DiaDeviceManager *manager = (DiaDeviceManager *)object;
-    if (money > 0) {
-        DiaDeviceManager_PerformTransaction(manager, money, true);
-        return 0;
-    }
-    return 1;
-}
 
-int confirm_transaction(void *object, int money){
+int refund_transaction(void *object, int money){
     DiaDeviceManager *manager = (DiaDeviceManager *)object;
-    //printf("Manager Electronical:    %d",manager->ElectronMoney);
     int bonuses = 0;
-    bonuses = DiaDeviceManager_ConfirmTransaction(manager, money);
+    bonuses = DiaDeviceManager_RefundTransaction(manager, money);
 
     if (bonuses > 0){
         SetBonuses(bonuses);
@@ -1307,10 +1298,8 @@ int main(int argc, char **argv) {
     hardware->get_openlid_function = get_openlid;
     hardware->get_electronical_function = get_electronical;
     hardware->request_transaction_function = request_transaction;
-    hardware->request_transaction_separated_function = request_transaction_separated;
-    //--------------------------------------------------------------------------
-    hardware->confirm_transaction_function = confirm_transaction;
-    //--------------------------------------------------------------------------
+    hardware->refund_transaction_function = refund_transaction;
+
     printf("HW init 8...\n");
     hardware->get_transaction_status_function = get_transaction_status;
     hardware->get_volume_function = get_volume;
