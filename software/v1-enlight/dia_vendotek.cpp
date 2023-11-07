@@ -355,58 +355,116 @@ int do_ping(payment_opts_t *opts)
     return 0;
 }
 
-int do_refund(payment_opts_t *opts){
+int do_refund(void * driverPtr, payment_opts_t *opts) {
+    DiaVendotek * driver = reinterpret_cast<DiaVendotek *>(driverPtr);
+    int state = 0;
     
-    vtk_logi("Refund");
+    // Заполните refund_t структуру на основе параметров opts
+    struct refund_t {
+    int opnum;           // Операционный номер (Operation Number)
+    int amount;          // Сумма возврата в минорных единицах валюты (Amount in Minor Currency Units)
+    int timeout;         // Таймаут операции в секундах (Operation Timeout)
+    int event_number;    // Номер события (Event Number)
 
+    // Другие поля, если необходимо
+    };
+
+    refund_t refund;
+    refund.opnum = opts->opnum;
+    refund.amount = opts->price;
+    refund.timeout = opts->timeout;
+    
+    // Установите начальное значение структуры stopts на основе параметров opts
     stage_opts_t stopts;
-        stopts.vtk     = opts->vtk;
-        stopts.timeout = opts->timeout * 1000;
-        stopts.verbose = opts->verbose;
-        stopts.mreq    = opts->mreq;
-        stopts.mresp   = opts->mresp;
-        stopts.allow_eof = 0;
-
-     payment_t payment;
-        payment.evnum     = opts->evnum;
-        payment.evname    = opts->evname;
-        payment.prodid    = opts->prodid;
-        payment.prodname  = opts->prodname;
-        payment.price     = opts->price;
-        payment.timeout   = opts->timeout;
-
-    stopts.timeout = payment.timeout * 1000;
-    payment.opnum++;
-    stage_req_t vrp_req[6] = {};
-
-        vrp_req[0].id = 0x1;
-        vrp_req[0].valstr = (char*)"VRP";
-        vrp_req[1].id = 0x3;
-        vrp_req[1].valint = &payment.opnum;
-        vrp_req[2].id = 0x4;
-        vrp_req[2].valint = &payment.price;
-        vrp_req[3].id = 0x9;
-        vrp_req[3].valint =  payment.prodname ? &payment.prodid : NULL;
-        vrp_req[4].id = 0x7;
-        vrp_req[4].valstr = (char*)"RETURN";
-        vrp_req[5].id = 0x8;
-        vrp_req[5].valint = &payment.evn
-        
-    stage_resp_t vrp_resp[4] = {};
-        vrp_resp[0].id = 0x1;
-        vrp_resp[0].expstr = (char*)"VRP";
-        vrp_resp[1].id = 0x3;
-        vrp_resp[1].expint = &payment.opnum;
-        vrp_resp[2].id = 0x4;
-        vrp_resp[2].expint = &payment.price;
-        vrp_resp[3].id = 0;
-
-    vtk_logi("timeout %d", stopts.timeout);
-
-    if (do_stage(&stopts, idl_req, idl_resp) < 0) {
-        return -1;
+    stopts.vtk = opts->vtk;
+    stopts.timeout = opts->timeout * 1000;
+    stopts.verbose = opts->verbose;
+    stopts.mreq = opts->mreq;
+    stopts.mresp = opts->mresp;
+    stopts.allow_eof = 0;
+    
+    int rc_vrp_return = 0;
+    int rc_fin_return = 0;
+    
+    // Определите текущее состояние операции водства в state
+    pthread_mutex_lock(&driver->StateLock);
+    state = driver->PaymentStage;
+    if (state > 0) {
+        driver->PaymentStage = 3; // Перейти к этапу VRP Return
     }
-    return 0;
+    pthread_mutex_unlock(&driver->StateLock);
+    
+    if (state > 0) {
+        // Этап VRP Return
+        stopts.timeout = refund.timeout * 1000;
+        refund.opnum++;
+        
+        stage_req_t vrp_return_req[6] = {};
+        vrp_return_req[0].id = 0x01;
+        vrp_return_req[0].valstr = (char*)"VRP";
+        vrp_return_req[1].id = 0x03;
+        vrp_return_req[1].valint = &refund.opnum;
+        vrp_return_req[2].id = 0x04;
+        vrp_return_req[2].valint = &refund.amount;
+        vrp_return_req[3].id = 0x07;
+        vrp_return_req[3].valstr = (char*)"RETURN";
+        vrp_return_req[4].id = 0x08;
+        vrp_return_req[4].valint = &refund.event_number;
+        vrp_return_req[5].id = 0;
+        
+        stage_resp_t vrp_return_resp[4] = {};
+        vrp_return_resp[0].id = 0x01;
+        vrp_return_resp[0].expstr = (char*)"VRP";
+        vrp_return_resp[1].id = 0x03;
+        vrp_return_resp[1].expint = &refund.opnum;
+        vrp_return_resp[2].id = 0x04;
+        vrp_return_resp[2].expint = &refund.amount;
+        vrp_return_resp[3].id = 0;
+        
+        rc_vrp_return = do_stage(&stopts, vrp_return_req, vrp_return_resp) >= 0;
+    }
+    
+    // Этап FIN Return
+    pthread_mutex_lock(&driver->StateLock);
+    state = driver->PaymentStage;
+    if (state > 0) {
+        driver->PaymentStage = 4; // Перейти к этапу FIN Return
+    }
+    pthread_mutex_unlock(&driver->StateLock);
+    
+    if (rc_vrp_return && state > 0) {
+        stopts.allow_eof = 1;
+        
+        stage_req_t fin_return_req[5] = {};
+        fin_return_req[0].id = 0x01;
+        fin_return_req[0].valstr = (char*)"FIN";
+        fin_return_req[1].id = 0x03;
+        fin_return_req[1].valint = &refund.opnum;
+        fin_return_req[2].id = 0x04;
+        fin_return_req[2].valint = &refund.amount;
+        fin_return_req[3].id = 0x08;
+        fin_return_req[3].valint = &refund.event_number;
+        fin_return_req[4].id = 0;
+        
+        stage_resp_t fin_return_resp[4] = {};
+        fin_return_resp[0].id = 0x01;
+        fin_return_resp[0].expstr = (char*)"FIN";
+        fin_return_resp[1].id = 0x03;
+        fin_return_resp[1].expint = &refund.opnum;
+        fin_return_resp[2].id = 0x04;
+        fin_return_resp[2].expint = &refund.amount;
+        fin_return_resp[3].id = 0;
+        
+        rc_fin_return = do_stage(&stopts, fin_return_req, fin_return_resp) >= 0;
+    }
+    
+    // Сброс состояния операции
+    pthread_mutex_lock(&driver->StateLock);
+    driver->PaymentStage = 0;
+    pthread_mutex_unlock(&driver->StateLock);
+    
+    // Возвращаем результат операции возврата средств
+    return (rc_vrp_return && rc_fin_return) ? 0 : -1;
 }
 
 int do_abort(payment_opts_t *opts)
